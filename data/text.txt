@@ -1,0 +1,3 @@
+Tomorrow, November 21, at 07:00 AM GMT / 02:00 AM EST we are planning to install a technical patch for #EscapefromTarkov. The installation will take approximately 6 hours, but may be extended if required. The game will not be accessible during this period.
+
+● The update is aimed at improving the matchmaking system.
