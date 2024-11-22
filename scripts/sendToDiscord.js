@@ -4,7 +4,7 @@ const request = require('request');
 async function sendToDiscord(translatedText) {
 	try {
 		const message = {
-			content: translatedText + ``,
+			content: translatedText + `\n<@&607881904645210122>`,
 		};
 
 		request.post(
