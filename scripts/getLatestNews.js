@@ -2,14 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { exec } = require('child_process');
-require('dotenv').config();
-
-const dataFilePath = path.resolve(__dirname, '../data/text.txt');
-const imageFilePath = path.resolve(__dirname, '../data/news-img.jpg');
+const translateAndSendNews = require('./translateNews');
 
 async function fetchLatestMessage() {
-    let hasNewImage = false;
+    let hasNewMessage = false;
     try {
         const { data } = await axios.get(process.env.SCRAPE_URL);
         const $ = cheerio.load(data);
@@ -22,47 +18,43 @@ async function fetchLatestMessage() {
         const matchedUrl = imageUrl ? imageUrl.match(/url\(['"]?(.*?)['"]?\)/) : null;
         const latestImageUrl = matchedUrl ? matchedUrl[1] : null;
 
+        const dataFilePath = path.resolve(__dirname, '../data/text.txt');
+        const imageFilePath = path.resolve(__dirname, '../data/news-img.jpg');
+
+        // Ensure data directory exists
         if (!fs.existsSync(path.dirname(dataFilePath))) {
             fs.mkdirSync(path.dirname(dataFilePath), { recursive: true });
         }
 
+        // Check for new message
         const currentText = fs.existsSync(dataFilePath) ? fs.readFileSync(dataFilePath, 'utf8') : '';
-        let isNewMessage = false;
 
         if (latestMessage !== currentText) {
             console.log(`[INFO] New message detected.`);
             fs.writeFileSync(dataFilePath, latestMessage, 'utf8');
-            isNewMessage = true;
+            hasNewMessage = true;
         } else {
             console.log(`[INFO] No new messages.`);
         }
 
-        if (latestImageUrl && isNewMessage) {
+        // Handle image
+        if (latestImageUrl && hasNewMessage) {
             try {
                 console.log("[INFO] New image detected in latest message. Downloading...");
                 const response = await axios.get(latestImageUrl, { responseType: 'arraybuffer' });
                 fs.writeFileSync(imageFilePath, response.data);
                 console.log("[INFO] Image saved as news-img.jpg");
-                hasNewImage = true;
             } catch (imgError) {
                 console.error("[ERROR] Failed to download the image:", imgError.message);
             }
-        } else if (isNewMessage && fs.existsSync(imageFilePath)) {
+        } else if (hasNewMessage && fs.existsSync(imageFilePath)) {
             fs.unlinkSync(imageFilePath);
             console.log("[INFO] Removed old image file since new message has no image.");
         }
 
-        if (isNewMessage) {
-            exec('node ./scripts/translateNews.js', (error, stdout, stderr) => {
-                if (error) {
-                    console.error(`[ERROR] Failed to run translation script: ${error.message}`);
-                    return;
-                }
-                console.log(`=============================\nTranslation script output:\n${stdout}`);
-                if (stderr) console.error(`[ERROR] Translation script stderr:\n${stderr}`);
-                const translatedText = stdout.trim();
-                require('./sendToDiscord')(translatedText, hasNewImage);
-            });
+        // Trigger translation if there's a new message
+        if (hasNewMessage) {
+            await translateAndSendNews();
         }
     } catch (error) {
         console.error(`[ERROR] Failed to fetch channel messages:`, error);

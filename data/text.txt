@@ -1,1 +1,1 @@
-The technical issues have been resolved. #EscapefromTarkov
+Tomorrow, November 27, at 7:00 AM GMT / 2:00 AM EST we are planning to install patch 0.2.2.1 for #TarkovArena. The installation will take approximately 3 hours, but may be extended if required. The game will not be accessible during this period.
