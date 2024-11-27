@@ -31,6 +31,7 @@ async function fetchLatestMessage() {
 
         if (latestMessage !== currentText) {
             console.log(`[INFO] New message detected.`);
+            console.log(`[INFO] Message: ${latestMessage}`)
             fs.writeFileSync(dataFilePath, latestMessage, 'utf8');
             hasNewMessage = true;
         } else {

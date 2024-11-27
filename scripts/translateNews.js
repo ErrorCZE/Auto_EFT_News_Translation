@@ -26,9 +26,10 @@ async function translateAndSendNews() {
             model: "mistral-large-latest",
             messages: [
                 {
-                    role: "user",
-                    content: `Translate this text related to game Escape from Tarkov from English to Czech, if there is time convert it to CET (remove time zone name/shortcut CET too), keep map names etc in English if it is patch notes. You can also give it little formatting like titles etc using its markdown (Discord), remove all hashtags if any, GIVE ME JUST RAW RESULT:\n${textForTranslation}`,
-                },
+                    "role": "user",
+                    "content": `Translate this text related to game Escape from Tarkov or Escape from Tarkov: Arena from English to Czech, if there is time convert it to CET (remove time zone name/shortcut CET too), keep map names etc in English if it is patch notes. Use discord markdown formatting style (#, ##, ### for headings, **text** for bold, [text](<link>) for hidden links etc.) Remove all hashtags if present. GIVE ME JUST RAW RESULT:
+            ${textForTranslation}`
+                }
             ],
             n: 1,
         };
