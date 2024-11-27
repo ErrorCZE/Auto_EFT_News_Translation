@@ -11,11 +11,11 @@ async function sendToDiscord(translatedText, hasNewImage, detectedGame) {
         switch (detectedGame) {
             case 'arena':
                 webhookUrl = process.env.ARENA_DISCORD_WEBHOOK_URL;
-                roleTag = '<@&607881904645210122>';
+                roleTag = '<@&1031660384731529377>';
                 break;
             case 'tarkov':
                 webhookUrl = process.env.EFT_DISCORD_WEBHOOK_URL;
-                roleTag = '<@&1031660384731529377>';
+                roleTag = '<@&607881904645210122>';
                 break;
             default:
                 webhookUrl = process.env.EFT_DISCORD_WEBHOOK_URL;
