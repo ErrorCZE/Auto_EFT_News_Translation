@@ -1,8 +1,8 @@
 const fetchLatestMessage = require('./scripts/getLatestNews');
 
 function getRandomInterval() {
-    const min = 2 * 60 * 1000;
-    const max = 6 * 60 * 1000; 
+    const min = 1 * 60 * 1000;
+    const max = 4 * 60 * 1000; 
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
