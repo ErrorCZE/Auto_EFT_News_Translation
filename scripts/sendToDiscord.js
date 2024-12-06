@@ -34,7 +34,9 @@ async function sendToDiscord(translatedText, hasNewImage, detectedGame) {
                     contentType: 'image/jpeg',
                 },
             };
-        }
+        } else {
+            console.log("[INFO] No image file found to send.");
+        }        
 
         request.post(
             {

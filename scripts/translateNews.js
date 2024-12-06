@@ -1,12 +1,3 @@
-require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
-const axios = require('axios');
-const sendToDiscord = require('./sendToDiscord');
-
-const textFilePath = path.join(__dirname, '../data/text.txt');
-const imageFilePath = path.join(__dirname, '../data/news-img.jpg');
-
 async function translateAndSendNews() {
     try {
         const textForTranslation = fs.readFileSync(textFilePath, 'utf8');
@@ -53,10 +44,4 @@ async function translateAndSendNews() {
     } catch (error) {
         console.error('Error in translation process:', error.response ? error.response.data : error.message);
     }
-}
-
-module.exports = translateAndSendNews;
-
-if (require.main === module) {
-    translateAndSendNews();
 }

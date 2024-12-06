@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const sendToDiscord = require('./sendToDiscord');
 const translateAndSendNews = require('./translateNews');
 
 async function fetchLatestMessage() {
@@ -31,7 +32,7 @@ async function fetchLatestMessage() {
 
         if (latestMessage !== currentText) {
             console.log(`[INFO] New message detected.`);
-            console.log(`[INFO] Message: ${latestMessage}`)
+            console.log(`[INFO] Message: ${latestMessage}`);
             fs.writeFileSync(dataFilePath, latestMessage, 'utf8');
             hasNewMessage = true;
         } else {
@@ -53,9 +54,20 @@ async function fetchLatestMessage() {
             console.log("[INFO] Removed old image file since new message has no image.");
         }
 
-        // Trigger translation if there's a new message
+        // Skip translation for links or hashtags
+        const isSimpleLinkOrHashtag = /^#\w+$/i.test(latestMessage) ||
+            /^https?:\/\/\S+$/i.test(latestMessage) ||
+            /^(#\w+\s*)?(https?:\/\/\S+)(\s*#\w+)?$/i.test(latestMessage);
+
+
+
         if (hasNewMessage) {
-            await translateAndSendNews();
+            if (isSimpleLinkOrHashtag) {
+                console.log("[INFO] Message is a simple link or hashtag. Sending directly to Discord.");
+                await sendToDiscord(latestMessage, fs.existsSync(imageFilePath), 'default');
+            } else {
+                await translateAndSendNews();
+            }
         }
     } catch (error) {
         console.error(`[ERROR] Failed to fetch channel messages:`, error);
