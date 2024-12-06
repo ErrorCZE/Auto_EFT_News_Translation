@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const request = require('request');
+require('dotenv').config();
 
 const imageFilePath = path.resolve(__dirname, '../data/news-img.jpg');
 

@@ -4,6 +4,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const sendToDiscord = require('./sendToDiscord');
 const translateAndSendNews = require('./translateNews');
+require('dotenv').config();
 
 async function fetchLatestMessage() {
     let hasNewMessage = false;
@@ -54,21 +55,36 @@ async function fetchLatestMessage() {
             console.log("[INFO] Removed old image file since new message has no image.");
         }
 
-        // Skip translation for links or hashtags
-        const isSimpleLinkOrHashtag = /^#\w+$/i.test(latestMessage) ||
-            /^https?:\/\/\S+$/i.test(latestMessage) ||
+        // Detect simple links or hashtags first
+        const isSimpleLinkOrHashtag = /^https?:\/\/\S+$/i.test(latestMessage) ||
+            /^#\w+$/i.test(latestMessage) ||
             /^(#\w+\s*)?(https?:\/\/\S+)(\s*#\w+)?$/i.test(latestMessage);
 
+        if (isSimpleLinkOrHashtag) {
+            // Detect the game first before cleaning the message
+            let detectedGame = 'default'; // Default game
 
+            // Check if hashtags are present to detect the game
+            const lowerCaseText = latestMessage.toLowerCase();
 
-        if (hasNewMessage) {
-            if (isSimpleLinkOrHashtag) {
-                console.log("[INFO] Message is a simple link or hashtag. Sending directly to Discord.");
-                await sendToDiscord(latestMessage, fs.existsSync(imageFilePath), 'default');
-            } else {
-                await translateAndSendNews();
+            if (lowerCaseText.includes('#tarkovarena') && lowerCaseText.includes('#escapefromtarkov')) {
+                detectedGame = 'default'; // Both games detected
+            } else if (lowerCaseText.includes('#tarkovarena')) {
+                detectedGame = 'arena'; // Arena game detected
+            } else if (lowerCaseText.includes('#escapefromtarkov')) {
+                detectedGame = 'tarkov'; // Tarkov game detected
             }
+
+            // Clean the hashtags if they exist
+            let cleanMessage = latestMessage.replace(/#(EscapefromTarkov|TarkovArena)\b/gi, '').trim();
+
+            console.log("[INFO] Simple message detected. Sending directly to Discord.");
+            await sendToDiscord(cleanMessage, fs.existsSync(imageFilePath), detectedGame);
+        } else {
+            await translateAndSendNews();
         }
+
+
     } catch (error) {
         console.error(`[ERROR] Failed to fetch channel messages:`, error);
     }

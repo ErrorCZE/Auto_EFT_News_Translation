@@ -1,7 +1,27 @@
+const fs = require('fs');
+const axios = require('axios');
+const path = require('path');
+const sendToDiscord = require('./sendToDiscord');
+require('dotenv').config();
+
+// Define file paths
+const textFilePath = path.resolve(__dirname, '../data/text.txt');
+const imageFilePath = path.resolve(__dirname, '../data/news-img.jpg');
+
 async function translateAndSendNews() {
     try {
+        // Validate environment variables
+        if (!process.env.API_URL || !process.env.API_TOKEN) {
+            throw new Error("Missing environment variables: API_URL or API_TOKEN.");
+        }
+
+        // Read the text for translation
+        if (!fs.existsSync(textFilePath)) {
+            throw new Error("Text file for translation does not exist.");
+        }
         const textForTranslation = fs.readFileSync(textFilePath, 'utf8');
 
+        // Detect the game based on hashtags
         let detectedGame = null;
         const lowerCaseText = textForTranslation.toLowerCase();
 
@@ -15,6 +35,7 @@ async function translateAndSendNews() {
             detectedGame = 'default';
         }
 
+        // Construct the translation request payload
         const jsonPayload = {
             model: "mistral-large-latest",
             messages: [
@@ -26,6 +47,7 @@ async function translateAndSendNews() {
             n: 1,
         };
 
+        // Send the translation request
         const response = await axios.post(process.env.API_URL, jsonPayload, {
             headers: {
                 Authorization: `Bearer ${process.env.API_TOKEN}`,
@@ -33,15 +55,23 @@ async function translateAndSendNews() {
             },
         });
 
+        // Check for translated text and prepare to send to Discord
         const hasNewImage = fs.existsSync(imageFilePath);
-
         const translatedText = response.data.choices[0]?.message?.content;
 
+        if (!translatedText) {
+            throw new Error("Translation API did not return a valid response.");
+        }
+
+        // Send translated message to Discord
         await sendToDiscord(translatedText, hasNewImage, detectedGame);
 
         console.log(`[INFO] Translation cost: ${response.data.usage.total_tokens} (P: ${response.data.usage.prompt_tokens} C: ${response.data.usage.completion_tokens})`);
         console.log('[INFO] Translation result:', translatedText);
+
     } catch (error) {
         console.error('Error in translation process:', error.response ? error.response.data : error.message);
     }
 }
+
+module.exports = translateAndSendNews;
