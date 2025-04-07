@@ -4,102 +4,109 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const sendToDiscord = require('./sendToDiscord');
 const translateAndSendNews = require('./translateNews');
+const { DateTime } = require('luxon');
 require('dotenv').config();
+
+function getPragueTime() {
+    return DateTime.now().setZone('Europe/Prague').toFormat('yyyy-MM-dd HH:mm:ss');
+}
 
 async function fetchLatestMessage() {
     try {
-        const { data } = await axios.get(process.env.SCRAPE_URL);
-        const $ = cheerio.load(data);
+        console.log(`[${getPragueTime()}] Starting to fetch latest message...`);
 
+        const { data } = await axios.get(process.env.SCRAPE_URL);
+        console.log(`[${getPragueTime()}] Successfully fetched data from URL.`);
+
+        const $ = cheerio.load(data);
         const latestMessageElement = $('.tgme_widget_message').last();
+
         const latestMessage = latestMessageElement.find('.tgme_widget_message_text').text().trim();
+        console.log(`[${getPragueTime()}] Extracted message: "${latestMessage}"`);
 
         const latestImageWrap = latestMessageElement.find('.tgme_widget_message_photo_wrap').first();
         const imageUrl = latestImageWrap.length > 0 ? latestImageWrap.attr('style') : null;
         const matchedUrl = imageUrl ? imageUrl.match(/url\(['"]?(.*?)['"]?\)/) : null;
         const latestImageUrl = matchedUrl ? matchedUrl[1] : null;
 
+        console.log(`[${getPragueTime()}] Extracted image URL: ${latestImageUrl || 'None'}`);
+
         const dataFilePath = path.resolve(__dirname, '../data/text.txt');
         const imageFilePath = path.resolve(__dirname, '../data/news-img.jpg');
         const lastMessageFilePath = path.resolve(__dirname, '../data/last_processed_message.txt');
 
-        // Ensure data directory exists
         if (!fs.existsSync(path.dirname(dataFilePath))) {
             fs.mkdirSync(path.dirname(dataFilePath), { recursive: true });
+            console.log(`[${getPragueTime()}] Created data directory.`);
         }
 
-        // Read last processed message
         const lastProcessedMessage = fs.existsSync(lastMessageFilePath)
             ? fs.readFileSync(lastMessageFilePath, 'utf8').trim()
             : '';
 
-        // Check if message is truly new
-        if (latestMessage !== lastProcessedMessage) {
-            console.log(`[INFO] New message detected.`);
-            console.log(`[INFO] Message: ${latestMessage}`);
+        console.log(`[${getPragueTime()}] Last processed message: "${lastProcessedMessage}"`);
 
-            // Write current message as last processed message
+        if (latestMessage !== lastProcessedMessage) {
+            console.log(`[${getPragueTime()}] New message detected.`);
+
             fs.writeFileSync(lastMessageFilePath, latestMessage, 'utf8');
             fs.writeFileSync(dataFilePath, latestMessage, 'utf8');
 
-            // Handle image
             if (latestImageUrl) {
                 try {
-                    console.log("[INFO] New image detected in latest message. Downloading...");
+                    console.log(`[${getPragueTime()}] Image found. Downloading...`);
                     const response = await axios.get(latestImageUrl, { responseType: 'arraybuffer' });
                     fs.writeFileSync(imageFilePath, response.data);
-                    console.log("[INFO] Image saved as news-img.jpg");
+                    console.log(`[${getPragueTime()}] Image saved to news-img.jpg`);
                 } catch (imgError) {
-                    console.error("[ERROR] Failed to download the image:", imgError.message);
+                    console.error(`[${getPragueTime()}] Failed to download image: ${imgError.message}`);
                 }
             } else if (fs.existsSync(imageFilePath)) {
                 fs.unlinkSync(imageFilePath);
-                console.log("[INFO] Removed old image file since new message has no image.");
+                console.log(`[${getPragueTime()}] Old image removed (no image in new message).`);
             }
 
-            // Detect simple links or hashtags first
             const isSimpleLinkOrHashtag = /^https?:\/\/\S+$/i.test(latestMessage) ||
                 /^#\w+$/i.test(latestMessage) ||
                 /^(#\w+\s*)?(https?:\/\/\S+)(\s*#\w+)?$/i.test(latestMessage);
 
             if (isSimpleLinkOrHashtag) {
-                // Detect the game first before cleaning the message
-                let detectedGame = 'default'; // Default game
+                console.log(`[${getPragueTime()}] Simple message format detected.`);
 
-                // Check if hashtags are present to detect the game
+                let detectedGame = 'default';
                 const lowerCaseText = latestMessage.toLowerCase();
 
                 if (lowerCaseText.includes('#tarkovarena') && lowerCaseText.includes('#escapefromtarkov')) {
-                    detectedGame = 'default'; // Both games detected
+                    detectedGame = 'default';
                 } else if (lowerCaseText.includes('#tarkovarena')) {
-                    detectedGame = 'arena'; // Arena game detected
+                    detectedGame = 'arena';
                 } else if (lowerCaseText.includes('#escapefromtarkov')) {
-                    detectedGame = 'tarkov'; // Tarkov game detected
+                    detectedGame = 'tarkov';
                 }
 
-                console.log("[DEBUG] Before cleaning:", latestMessage);
+                console.log(`[${getPragueTime()}] Detected game: ${detectedGame}`);
 
-                // Remove hashtags like '#EscapefromTarkov' or '#TarkovArena' even if followed by a URL
                 let cleanMessage = latestMessage
-                    .replace(/#(?:EscapefromTarkov|TarkovArena)(?=\S)/gi, '') // Remove hashtags that are followed directly by non-space characters
-                    .replace(/#(?:EscapefromTarkov|TarkovArena)\b/gi, '') // Remove hashtags with spaces after them or at the end
-                    .replace(/\s+/g, ' ') // Replace multiple spaces with a single space
-                    .trim(); // Remove leading/trailing whitespace
+                    .replace(/#(?:EscapefromTarkov|TarkovArena)(?=\S)/gi, '')
+                    .replace(/#(?:EscapefromTarkov|TarkovArena)\b/gi, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
 
-                console.log("[DEBUG] After cleaning:", cleanMessage);
+                console.log(`[${getPragueTime()}] Cleaned message: "${cleanMessage}"`);
 
-                console.log("[INFO] Simple message detected. Sending directly to Discord.");
                 await sendToDiscord(cleanMessage, fs.existsSync(imageFilePath), detectedGame);
+                console.log(`[${getPragueTime()}] Sent simple message to Discord.`);
             } else {
+                console.log(`[${getPragueTime()}] Complex message. Passing to translation...`);
                 await translateAndSendNews();
             }
 
         } else {
-            console.log(`[INFO] No new messages. Skipping processing.`);
+            console.log(`[${getPragueTime()}] No new messages. Skipping.`);
         }
 
     } catch (error) {
-        console.error(`[ERROR] Failed to fetch channel messages:`, error);
+        console.error(`[${getPragueTime()}] Error during fetch or processing: ${error.message}`);
     }
 }
 

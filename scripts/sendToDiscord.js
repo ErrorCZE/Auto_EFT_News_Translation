@@ -1,14 +1,22 @@
 const fs = require('fs');
 const path = require('path');
 const request = require('request');
+const { DateTime } = require('luxon');
 require('dotenv').config();
 
 const imageFilePath = path.resolve(__dirname, '../data/news-img.jpg');
 const MAX_MESSAGE_LENGTH = 1999;
 
+function getPragueTime() {
+    return DateTime.now().setZone('Europe/Prague').toFormat('yyyy-MM-dd HH:mm:ss');
+}
+
 async function sendToDiscord(translatedText, hasNewImage, detectedGame) {
     try {
-        // Determine webhook URL and role tag based on game
+        console.log(`[${getPragueTime()}] Preparing to send message to Discord...`);
+        console.log(`[${getPragueTime()}] Detected Game: ${detectedGame}`);
+        console.log(`[${getPragueTime()}] Message Image: ${hasNewImage ? 'Yes' : 'No'}`);
+
         let webhookUrl, roleTag;
         switch (detectedGame) {
             case 'arena':
@@ -24,10 +32,14 @@ async function sendToDiscord(translatedText, hasNewImage, detectedGame) {
                 roleTag = '<@&607881904645210122> <@&1031660384731529377>';
         }
 
-        // Split text into paragraphs by line breaks first
+        if (!webhookUrl) {
+            throw new Error("Webhook URL is missing for the detected game.");
+        }
+
+        console.log(`[${getPragueTime()}] Using webhook URL: ${webhookUrl}`);
+        console.log(`[${getPragueTime()}] Role tag to include: ${roleTag}`);
+
         const paragraphs = translatedText.split(/\n(?=[\s\S])/);
-        
-        // Prepare chunks while keeping paragraphs intact
         const chunks = [];
         let currentChunk = '';
 
@@ -35,23 +47,19 @@ async function sendToDiscord(translatedText, hasNewImage, detectedGame) {
             paragraph = paragraph.trim();
             if (!paragraph) continue;
 
-            // If adding this paragraph would exceed the limit
             if ((currentChunk + (currentChunk ? '\n' : '') + paragraph).length > MAX_MESSAGE_LENGTH) {
-                // If the paragraph itself is longer than MAX_MESSAGE_LENGTH
                 if (paragraph.length > MAX_MESSAGE_LENGTH) {
-                    // If we have content in currentChunk, save it first
                     if (currentChunk) {
                         chunks.push(currentChunk);
                         currentChunk = '';
                     }
-                    
-                    // Split long paragraph at the last space before MAX_MESSAGE_LENGTH
+
                     let remainingText = paragraph;
                     while (remainingText.length > 0) {
-                        let splitIndex = remainingText.length <= MAX_MESSAGE_LENGTH 
-                            ? remainingText.length 
+                        let splitIndex = remainingText.length <= MAX_MESSAGE_LENGTH
+                            ? remainingText.length
                             : remainingText.lastIndexOf(' ', MAX_MESSAGE_LENGTH);
-                        
+
                         if (splitIndex === -1 || splitIndex > MAX_MESSAGE_LENGTH) {
                             splitIndex = MAX_MESSAGE_LENGTH;
                         }
@@ -60,33 +68,34 @@ async function sendToDiscord(translatedText, hasNewImage, detectedGame) {
                         remainingText = remainingText.substring(splitIndex).trim();
                     }
                 } else {
-                    // Save current chunk and start new one with this paragraph
                     if (currentChunk) {
                         chunks.push(currentChunk);
                     }
                     currentChunk = paragraph;
                 }
             } else {
-                // Add paragraph to current chunk
                 currentChunk += (currentChunk ? '\n' : '') + paragraph;
             }
         }
 
-        // Add the last chunk if not empty
         if (currentChunk) {
             chunks.push(currentChunk);
         }
 
-        // Send each chunk sequentially
+        if (chunks.length === 0) {
+            chunks.push(' ');
+        }              
+
+        console.log(`[${getPragueTime()}] Message will be split into ${chunks.length} part(s).`);
+
         for (let i = 0; i < chunks.length; i++) {
             const isLastChunk = i === chunks.length - 1;
             const formData = {
-                content: isLastChunk 
+                content: isLastChunk
                     ? chunks[i] + `\n-# Překlad byl automaticky vygenerován pomocí AI\n${roleTag}`
                     : chunks[i]
             };
 
-            // Only attach image to the last chunk
             if (isLastChunk && hasNewImage && fs.existsSync(imageFilePath)) {
                 formData.file = {
                     value: fs.createReadStream(imageFilePath),
@@ -95,6 +104,7 @@ async function sendToDiscord(translatedText, hasNewImage, detectedGame) {
                         contentType: 'image/jpeg',
                     },
                 };
+                console.log(`[${getPragueTime()}] Attaching image to final chunk.`);
             }
 
             await new Promise((resolve, reject) => {
@@ -108,27 +118,25 @@ async function sendToDiscord(translatedText, hasNewImage, detectedGame) {
                     },
                     (error, response, body) => {
                         if (error) {
-                            console.error(
-                                `[${new Date().toLocaleString('en-GB', { timeZone: 'UTC', dateStyle: 'short', timeStyle: 'medium', })}] Error sending webhook message for ${detectedGame || 'unknown game'}:`, error
-                            );
+                            console.error(`[${getPragueTime()}] ❌ Error sending chunk ${i + 1}/${chunks.length}:`, error);
                             reject(error);
                         } else {
-                            console.log(`[INFO] Message part ${i + 1}/${chunks.length} sent for ${detectedGame || 'unknown game'}${isLastChunk && hasNewImage ? ' with image.' : '.'}`);
+                            console.log(`[${getPragueTime()}] ✅ Chunk ${i + 1}/${chunks.length} sent successfully${isLastChunk && hasNewImage ? ' (with image).' : '.'}`);
                             resolve();
                         }
                     }
                 );
             });
 
-            // Add a small delay between messages to avoid rate limiting
             if (!isLastChunk) {
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }
+
+        console.log(`[${getPragueTime()}] All message chunks sent successfully.`);
+
     } catch (error) {
-        console.error(
-            `[${new Date().toLocaleString('en-GB', { timeZone: 'UTC', dateStyle: 'short', timeStyle: 'medium', })}] Unexpected error for ${detectedGame || 'unknown game'}:`, error
-        );
+        console.error(`[${getPragueTime()}] ❌ Unexpected error while sending to Discord:`, error.message || error);
     }
 }
 
