@@ -1,1 +1,1 @@
-hovno
+We have installed a technical update for #TarkovArena. Please download the update via the Launcher.● Fixed various issues with the player culling system, including the causes of players becoming invisible;● Several optimization fixes to the culling system.

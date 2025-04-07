@@ -8,11 +8,14 @@ require('dotenv').config();
 const textFilePath = path.resolve(__dirname, '../data/text.txt');
 const imageFilePath = path.resolve(__dirname, '../data/news-img.jpg');
 
+// OpenRouter API details
+const API_KEY = process.env.API_KEY; // Store this in your .env file
+
 async function translateAndSendNews() {
     try {
         // Validate environment variables
-        if (!process.env.API_URL || !process.env.API_TOKEN) {
-            throw new Error("Missing environment variables: API_URL or API_TOKEN.");
+        if (!API_KEY) {
+            throw new Error("Missing environment variable: API_KEY");
         }
 
         // Read the text for translation
@@ -35,38 +38,50 @@ async function translateAndSendNews() {
             detectedGame = 'default';
         }
 
-        // Construct the translation request payload
-        const jsonPayload = {
-            model: "mistral-large-latest",
+        // Send translation request using OpenRouter API with axios
+        const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+            model: 'deepseek/deepseek-chat-v3-0324:free',
             messages: [
                 {
-                    "role": "user",
-                    "content": `Translate this text to Czech language, USE FRIENDLY WORDING (informal/casual) but for more people, not one! Text can be related to game "Escape from Tarkov" or "Escape from Tarkov Arena". If there is time convert it to CET (remove time zone name/shortcut CET too), keep map & item & gamemode names as they are. Use discord markdown formatting style (#, ##, ### for headings, **text** for bold, [text other than link](<link>) for hidden links etc.) Remove all hashtags if present (keep them if they are the only text here and nothing else), i wrote you game names you can use them. TRANSLATE TEXT TO CZECH LANGUAGE FROM ENGLISH, USE FRIENDLY WORDING (informal/casual) but for more people, not one. GIVE ME JUST RAW CZECH TRANSLATED RESULT:\n${textForTranslation}`
+                    role: 'user',
+                    content: `Translate the following text into Czech using informal tone suitable for a group of people, not just one person.
+                    
+- If the text contains a time, convert it to CET and remove the time zone abbreviation.
+- Keep map names, item names, and game mode names unchanged.
+- Translate quest/task goals to czech too, but using the base verb form if it is (Eliminate, Capture, etc...), not the imperative. Do not translate quest/task names.
+- Format the output using Discord markdown:
+  - #, ##, or ### for main info from the message.
+  - [hidden text](<link>) for hidden links.
+  - *italic*, **bold**, and **underline** where appropriate.
+  - Alwys use # for the first line of the message as title of message.
+- Remove all hashtags unless they are the only text in a line.
+- The text may relate to *Escape from Tarkov* or *Escape from Tarkov Arena*, so you can use these names as they are.
+- Try to split it into more lines giving some sense and meaning to the text.
+
+Provide only the raw Czech translation:
+
+${textForTranslation}`
                 }
-            ],
-            n: 1,
-        };
-
-        // Send the translation request
-        const response = await axios.post(process.env.API_URL, jsonPayload, {
+            ]
+        }, {
             headers: {
-                Authorization: `Bearer ${process.env.API_TOKEN}`,
-                "Content-Type": "application/json",
-            },
+                'Authorization': `Bearer ${API_KEY}`,
+                'Content-Type': 'application/json',
+            }
         });
-
-        // Check for translated text and prepare to send to Discord
-        const hasNewImage = fs.existsSync(imageFilePath);
-        const translatedText = response.data.choices[0]?.message?.content;
-
-        if (!translatedText) {
+        
+        // Extract translated text
+        if (!response.data.choices || response.data.choices.length === 0) {
             throw new Error("Translation API did not return a valid response.");
         }
-
-        // Send translated message to Discord
+        
+        const translatedText = response.data.choices[0].message.content;
+        
+        // Check for image and send to Discord
+        const hasNewImage = fs.existsSync(imageFilePath);
         await sendToDiscord(translatedText, hasNewImage, detectedGame);
 
-        console.log(`[INFO] Translation cost: ${response.data.usage.total_tokens} (P: ${response.data.usage.prompt_tokens} C: ${response.data.usage.completion_tokens})`);
+        console.log('[INFO] Translation completed successfully');
         console.log('[INFO] Translation result:', translatedText);
 
     } catch (error) {
