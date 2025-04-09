@@ -21,8 +21,45 @@ async function fetchLatestMessage() {
         const $ = cheerio.load(data);
         const latestMessageElement = $('.tgme_widget_message').last();
 
-        const latestMessage = latestMessageElement.find('.tgme_widget_message_text').text().trim();
-        console.log(`[${getPragueTime()}] Extracted message: "${latestMessage}"`);
+        // Extract message text with only relevant links
+        const messageTextElement = latestMessageElement.find('.tgme_widget_message_text');
+        
+        let latestMessage = '';
+        messageTextElement.contents().each((i, elem) => {
+            if (elem.type === 'text') {
+                latestMessage += $(elem).text();
+            } else if (elem.name === 'a') {
+                const href = $(elem).attr('href');
+                const text = $(elem).text();
+                
+                // Check if this is a version number link (they start with http:// and look like version numbers)
+                const isVersionNumber = href && 
+                    (href.match(/^http:\/\/\d+\.\d+\.\d+\.\d+\/?$/) || 
+                     href.match(/^http:\/\/\d+\.\d+\.\d+\/?$/));
+                
+                // Check if this is a hashtag link
+                const isHashtag = href && href.startsWith('?q=%23');
+                
+                // Handle real links (patchnotes)
+                if (href && href.includes('escapefromtarkov.com') || href && href.includes('arena.tarkov.com')) {
+                    latestMessage += `${text} (${href})`;
+                } else if (isVersionNumber || isHashtag) {
+                    // For version numbers or hashtags, just add the text
+                    latestMessage += text;
+                } else if (href && (href.startsWith('https://') || href.startsWith('http://'))) {
+                    // For other http/https links that aren't version numbers
+                    latestMessage += `${text} (${href})`;
+                } else {
+                    // For any other type of link, just add the text
+                    latestMessage += text;
+                }
+            } else if (elem.name === 'br') {
+                latestMessage += '\n';
+            }
+        });
+        
+        latestMessage = latestMessage.trim();
+        console.log(`[${getPragueTime()}] Extracted message with links: "${latestMessage}"`);
 
         const latestImageWrap = latestMessageElement.find('.tgme_widget_message_photo_wrap').first();
         const imageUrl = latestImageWrap.length > 0 ? latestImageWrap.attr('style') : null;

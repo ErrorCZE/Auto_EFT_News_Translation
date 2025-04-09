@@ -55,9 +55,9 @@ async function translateAndSendNews() {
 - If the text contains a time, convert it to CET and remove the time zone abbreviation.
 - Keep map names, item names, and game mode names unchanged.
 - Translate quest/task goals to czech too, but using the base verb form if it is (Eliminate, Capture, etc...), not the imperative. Do not translate quest/task names.
-- Format the output using Discord markdown:
+- Format the output:
   - #, ##, or ### for main info from the message.
-  - [hidden text](<link>) for hidden links.
+  - [text](<link>) for links - replace text with actual text and link with actual link for example like "[Patchnotes pro EFT](<https://www.escapefromtarkov.com/news/id/340>)"
   - *italic*, **bold**, and **underline** where appropriate.
   - Alwys use # for the first line of the message as title of message.
 - Remove all hashtags unless they are the only text in a line.
