@@ -1,3 +1,4 @@
+// getLatestNews.js
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -9,6 +10,40 @@ require('dotenv').config();
 
 function getPragueTime() {
     return DateTime.now().setZone('Europe/Prague').toFormat('yyyy-MM-dd HH:mm:ss');
+}
+
+function extractTextWithLineBreaks($, element) {
+    let result = '';
+    
+    element.contents().each((i, node) => {
+        if (node.type === 'text') {
+            result += $(node).text();
+        } else if (node.name === 'br') {
+            result += '\n';
+        } else if (node.name === 'a') {
+            const href = $(node).attr('href');
+            const text = $(node).text();
+            const isVersionNumber = href && (href.match(/^http:\/\/\d+\.\d+\.\d+\.\d+\/?$/) || href.match(/^http:\/\/\d+\.\d+\.\d+\/?$/));
+            const isHashtag = href && href.startsWith('?q=%23');
+
+            if (href && (href.includes('escapefromtarkov.com') || href.includes('arena.tarkov.com'))) {
+                result += `${text} (${href})`;
+            } else if (isVersionNumber || isHashtag) {
+                result += text;
+            } else if (href && (href.startsWith('https://') || href.startsWith('http://'))) {
+                result += `${text} (${href})`;
+            } else {
+                result += text;
+            }
+        } else if (node.name === 'b' || node.name === 'strong' || node.name === 'i' || node.name === 'em') {
+            // Recursively process bold/italic tags
+            result += extractTextWithLineBreaks($, $(node));
+        } else {
+            result += $(node).text();
+        }
+    });
+    
+    return result;
 }
 
 async function fetchLatestMessage() {
@@ -28,33 +63,20 @@ async function fetchLatestMessage() {
         }
 
         const messageTextElement = latestMessageElement.find('.tgme_widget_message_text');
-        let latestMessage = '';
-
-        messageTextElement.contents().each((i, elem) => {
-            if (elem.type === 'text') {
-                latestMessage += $(elem).text();
-            } else if (elem.name === 'a') {
-                const href = $(elem).attr('href');
-                const text = $(elem).text();
-                const isVersionNumber = href && (href.match(/^http:\/\/\d+\.\d+\.\d+\.\d+\/?$/) || href.match(/^http:\/\/\d+\.\d+\.\d+\/?$/));
-                const isHashtag = href && href.startsWith('?q=%23');
-
-                if (href && (href.includes('escapefromtarkov.com') || href.includes('arena.tarkov.com'))) {
-                    latestMessage += `${text} (${href})`;
-                } else if (isVersionNumber || isHashtag) {
-                    latestMessage += text;
-                } else if (href && (href.startsWith('https://') || href.startsWith('http://'))) {
-                    latestMessage += `${text} (${href})`;
-                } else {
-                    latestMessage += text;
-                }
-            } else {
-                latestMessage += $(elem).text();
-            }
-        });
-
-        latestMessage = latestMessage.trim();
-        console.log(`[${getPragueTime()}] Extracted message: "${latestMessage}"`);
+        
+        // Use the new extraction function that preserves line breaks
+        let latestMessage = extractTextWithLineBreaks($, messageTextElement);
+        
+        // Clean up: remove excessive whitespace but preserve newlines
+        latestMessage = latestMessage
+            .replace(/[ \t]+/g, ' ')  // Multiple spaces/tabs -> single space
+            .replace(/\n{3,}/g, '\n\n')  // Max 2 newlines in a row
+            .trim();
+        
+        console.log(`[${getPragueTime()}] Extracted message:`);
+        console.log('---START---');
+        console.log(latestMessage);
+        console.log('---END---');
 
         // ✅ Extract ALL images
         const imageWraps = latestMessageElement.find('.tgme_widget_message_photo_wrap');

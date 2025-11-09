@@ -1,3 +1,4 @@
+// sendToDiscord.js
 const fs = require('fs');
 const path = require('path');
 const request = require('request');
@@ -8,6 +9,16 @@ const MAX_MESSAGE_LENGTH = 1999;
 
 function getPragueTime() {
     return DateTime.now().setZone('Europe/Prague').toFormat('yyyy-MM-dd HH:mm:ss');
+}
+
+function formatDiscordMessage(text) {
+    // Clean up excessive newlines (max 2 in a row)
+    text = text.replace(/\n{3,}/g, '\n\n');
+    
+    // Trim and ensure clean start/end
+    text = text.trim();
+    
+    return text;
 }
 
 async function sendToDiscord(translatedText, images = [], detectedGame = 'default') {
@@ -28,6 +39,9 @@ async function sendToDiscord(translatedText, images = [], detectedGame = 'defaul
                 webhookUrl = process.env.EFT_DISCORD_WEBHOOK_URL;
                 roleTag = '<@&607881904645210122> <@&1031660384731529377>';
         }
+
+        // Format the message for Discord
+        translatedText = formatDiscordMessage(translatedText);
 
         const paragraphs = translatedText.split(/\n\s*\n/);
         const chunks = [];
@@ -53,8 +67,14 @@ async function sendToDiscord(translatedText, images = [], detectedGame = 'defaul
         for (let i = 0; i < chunks.length; i++) {
             const isLast = i === chunks.length - 1;
 
+            // Add footer only to the last chunk
+            let content = chunks[i];
+            if (isLast) {
+                content += '\n\n-# Překlad byl automaticky vygenerován pomocí AI\n' + roleTag;
+            }
+
             const formData = {
-                content: isLast ? `${chunks[i]}\n-# Překlad byl automaticky vygenerován pomocí AI\n${roleTag}` : chunks[i]
+                content: content
             };
 
             if (isLast && images.length > 0) {
